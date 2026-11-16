@@ -1,6 +1,5 @@
 // ─── Customer Service ────────────────────────────────────────────────────────
-// Manages customer profile, accounts, and customer-scoped transaction queries.
-// Ensures strict ownership and customer isolation.
+// Manages customer profile, accounts, notifications, and transactions.
 // ────────────────────────────────────────────────────────────────────────────
 
 import db from "../config/database.js";
@@ -42,7 +41,6 @@ export const getCustomerProfile = async (userId) => {
  * Fetch customer's own transaction history with pagination and filtering.
  */
 export const getCustomerTransactions = async (userId, { limit = 20, offset = 0, status }) => {
-  // Ensure customer exists
   const customerRes = await db.query(`SELECT id FROM customers WHERE user_id = $1`, [userId]);
   if (customerRes.rows.length === 0) {
     throw ApiError.notFound("Customer not found");
@@ -84,4 +82,38 @@ export const getCustomerTransactions = async (userId, { limit = 20, offset = 0, 
   };
 };
 
-export default { getCustomerProfile, getCustomerTransactions };
+/**
+ * Fetch customer notifications.
+ */
+export const getCustomerNotifications = async (userId) => {
+  const { rows } = await db.query(
+    `SELECT id, title, message, type, is_read, link, created_at
+     FROM notifications
+     WHERE user_id = $1
+     ORDER BY created_at DESC
+     LIMIT 50`,
+    [userId]
+  );
+  return rows;
+};
+
+/**
+ * Mark notification as read.
+ */
+export const markNotificationRead = async (userId, notificationId) => {
+  const res = await db.query(
+    `UPDATE notifications
+     SET is_read = true
+     WHERE id = $1 AND user_id = $2
+     RETURNING *`,
+    [notificationId, userId]
+  );
+  return res.rows[0];
+};
+
+export default {
+  getCustomerProfile,
+  getCustomerTransactions,
+  getCustomerNotifications,
+  markNotificationRead
+};

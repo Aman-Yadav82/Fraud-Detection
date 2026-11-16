@@ -47,7 +47,6 @@ export const getCases = async ({ status, priority, assigned_to, limit = 20, offs
   params.push(limit, offset);
 
   const { rows } = await db.query(queryText, params);
-
   const countRes = await db.query(`SELECT COUNT(*) FROM fraud_cases`);
 
   return {
@@ -55,6 +54,41 @@ export const getCases = async ({ status, priority, assigned_to, limit = 20, offs
     total: parseInt(countRes.rows[0].count, 10),
     limit: parseInt(limit, 10),
     offset: parseInt(offset, 10)
+  };
+};
+
+/**
+ * Fetch alerts queue with severity and status.
+ */
+export const getAlerts = async ({ severity, status, limit = 50, offset = 0 }) => {
+  let queryText = `
+    SELECT a.*, t.amount, t.currency, t.merchant_name, t.created_at AS transaction_time,
+           u.first_name AS analyst_first, u.last_name AS analyst_last
+    FROM alerts a
+    JOIN transactions t ON a.transaction_id = t.id
+    LEFT JOIN users u ON a.assigned_to = u.id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (severity) {
+    params.push(severity);
+    queryText += ` AND a.severity = $${params.length}`;
+  }
+  if (status) {
+    params.push(status);
+    queryText += ` AND a.status = $${params.length}`;
+  }
+
+  queryText += ` ORDER BY a.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  params.push(limit, offset);
+
+  const { rows } = await db.query(queryText, params);
+  const countRes = await db.query(`SELECT COUNT(*) FROM alerts`);
+
+  return {
+    alerts: rows,
+    total: parseInt(countRes.rows[0].count, 10)
   };
 };
 
@@ -199,7 +233,6 @@ export const recordDecision = async (caseId, userId, { decision, notes }) => {
  * Manager tool: Reassign a case to another analyst.
  */
 export const reassignCase = async (caseId, managerId, newAnalystId) => {
-  // Validate analyst user
   const userRes = await db.query(
     `SELECT id, first_name, last_name, role FROM users WHERE id = $1 AND role = 'analyst'`,
     [newAnalystId]
@@ -221,7 +254,6 @@ export const reassignCase = async (caseId, managerId, newAnalystId) => {
     throw ApiError.notFound("Case not found");
   }
 
-  // Add system note
   await db.query(
     `INSERT INTO case_notes (case_id, author_id, note_type, content)
      VALUES ($1, $2, 'escalation', $3)`,
@@ -231,4 +263,4 @@ export const reassignCase = async (caseId, managerId, newAnalystId) => {
   return res.rows[0];
 };
 
-export default { getCases, getCaseById, addCaseNote, recordDecision, reassignCase };
+export default { getCases, getAlerts, getCaseById, addCaseNote, recordDecision, reassignCase };

@@ -1,4 +1,3 @@
-// ─── Customer Controller ────────────────────────────────────────────────────
 import customerService from "../services/customer.service.js";
 import { successResponse } from "../utils/apiResponse.js";
 
@@ -25,4 +24,22 @@ export const getTransactions = async (req, res, next) => {
   }
 };
 
-export default { getProfile, getTransactions };
+export const getNotifications = async (req, res, next) => {
+  try {
+    const notifications = await customerService.getCustomerNotifications(req.user.id);
+    return successResponse(res, notifications, "Notifications fetched successfully");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const markNotificationRead = async (req, res, next) => {
+  try {
+    const updated = await customerService.markNotificationRead(req.user.id, req.params.id);
+    return successResponse(res, updated, "Notification marked as read");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export default { getProfile, getTransactions, getNotifications, markNotificationRead };

@@ -6,6 +6,7 @@ import authorize from "../middleware/rbac.js";
 import validate from "../middleware/validate.js";
 import {
   getCases,
+  getAlerts,
   getCaseById,
   addNote,
   recordDecision,
@@ -16,7 +17,10 @@ const router = Router();
 
 router.use(authenticate);
 
-// Analysts, Managers, Admins, and Auditors can view cases
+// Alerts route (must be before /:id)
+router.get("/alerts/all", authorize("analyst", "manager", "admin", "auditor"), getAlerts);
+
+// Cases list & details
 router.get("/", authorize("analyst", "manager", "admin", "auditor"), getCases);
 router.get("/:id", authorize("analyst", "manager", "admin", "auditor"), getCaseById);
 
