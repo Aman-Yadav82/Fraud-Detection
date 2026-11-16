@@ -1,19 +1,19 @@
 // ─── Main Router ────────────────────────────────────────────────────────────
-// Aggregates every feature-specific router under a single prefix so app.js
-// only needs one `app.use("/api", router)` call.
+// Aggregates every feature-specific router under the /api prefix.
 // ────────────────────────────────────────────────────────────────────────────
 
 import { Router } from "express";
 import authRoutes from "./auth.routes.js";
+import customerRoutes from "./customer.routes.js";
+import transactionRoutes from "./transaction.routes.js";
+import caseRoutes from "./case.routes.js";
 
 const router = Router();
 
 // Mount sub-routers
 router.use("/auth", authRoutes);
-
-// Future feature routers go here, e.g.:
-// router.use("/transactions", transactionRoutes);
-// router.use("/alerts",       alertRoutes);
-// router.use("/reports",      reportRoutes);
+router.use("/customer", customerRoutes);
+router.use("/transactions", transactionRoutes);
+router.use("/cases", caseRoutes);
 
 export default router;
