@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# ML artifacts
+ml-service/data/*.csv
+ml-service/data/*.zip
+ml-service/app/models/*.joblib
+ml-service/app/models/*.pkl
+ml-service/app/models/*.h5
+!ml-service/app/models/__init__.py
+
+# Test coverage
+coverage/
+htmlcov/
+.pytest_cache/
+
+# Docker
+*.env.production
