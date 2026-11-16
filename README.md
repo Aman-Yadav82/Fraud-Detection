@@ -1,95 +1,131 @@
-🛡️ AI-Powered Fraud Detection & Transaction Risk Management Platform
+# 🛡️ AI-Powered Fraud Detection & Transaction Risk Management Platform
 
-> An intelligent transaction monitoring platform designed to detect suspicious financial activity using Machine Learning, behavioral analysis, rule-based detection, explainable risk scoring, and automated fraud-management workflows.
-
----
-
-## 📌 Overview
-
-Financial fraud is a major challenge for banks, fintech companies, payment platforms, and online businesses. Traditional rule-based systems can identify known fraud patterns, but they may struggle with new and evolving transaction behaviors.
-
-This project aims to develop an **AI-assisted Fraud Detection and Transaction Risk Management Platform** that combines:
-
-- Machine Learning
-- Rule-based fraud detection
-- Behavioral anomaly detection
-- Risk scoring
-- Explainable AI
-- Real-time transaction monitoring
-- Automated alerts
-- Fraud case management
-- Role-Based Access Control (RBAC)
-- Audit logging
-- Data analytics
-
-The system is designed as a **decision-support platform**, where AI assists fraud analysts rather than making irreversible financial decisions autonomously.
+> An enterprise-grade transaction monitoring platform designed to detect suspicious financial activity using Machine Learning, behavioral analysis, rule-based detection, explainable risk scoring, and automated fraud-management workflows.
 
 ---
 
-# 🎯 Objectives
+## 📌 Executive Summary
 
-The main objectives of this project are:
+Financial fraud presents immense operational and compliance challenges for fintechs, neobanks, and payment gateways. Traditional rule-based filters flag known signatures but suffer from high false-positive rates and miss evolving fraud vectors.
 
-1. Detect potentially fraudulent transactions using Machine Learning.
-2. Identify abnormal customer transaction behavior.
-3. Combine ML predictions with configurable fraud rules.
-4. Generate an interpretable transaction risk score.
-5. Explain the major factors contributing to a high-risk prediction.
-6. Automatically generate alerts for suspicious transactions.
-7. Create and manage fraud investigation cases.
-8. Provide different dashboards according to user roles.
-9. Maintain a complete audit trail of important actions.
-10. Provide analytics for fraud trends and system performance.
-11. Create a foundation for future real-time fraud detection and automation.
+This platform implements a **Hybrid Decision-Support Engine**:
+- **50% Supervised Machine Learning** (Random Forest / XGBoost with class-imbalance weighting)
+- **35% Dynamic Business Rule Engine** (Configurable threshold, velocity, and pattern filters)
+- **15% Behavioral Anomaly Signals** (Dynamic deviation from customer baseline)
 
 ---
 
-# 🏗️ System Architecture
+## 🏗️ System Architecture
 
-The planned architecture is:
+```mermaid
+flowchart TD
+    subgraph Frontend ["React 19 + Vite + Tailwind CSS"]
+        UI_Cust["Customer Portal"]
+        UI_Analyst["Analyst Workspace"]
+        UI_Mgr["Manager Command Center"]
+        UI_Admin["Policy Administration"]
+        UI_Auditor["Compliance Ledger"]
+    end
 
-```text
-                    ┌───────────────────┐
-                    │     Customer      │
-                    └─────────┬─────────┘
-                              │
-                         Transaction
-                              │
-                              ▼
-                 ┌────────────────────────┐
-                 │ Transaction Processing │
-                 └────────────┬───────────┘
-                              │
-                              ▼
-                 ┌────────────────────────┐
-                 │ Feature Engineering    │
-                 └────────────┬───────────┘
-                              │
-             ┌────────────────┼────────────────┐
-             ▼                ▼                ▼
-       Rule Engine        ML Model       Anomaly Detection
-             │                │                │
-             └────────────────┼────────────────┘
-                              ▼
-                    ┌─────────────────┐
-                    │   Risk Engine   │
-                    └────────┬────────┘
-                             │
-                    Risk Score: 0-100
-                             │
-              ┌──────────────┼──────────────┐
-              ▼              ▼              ▼
-             LOW           MEDIUM          HIGH
-              │              │               │
-           Approve        Monitor          Alert
-                                              │
-                                              ▼
-                                    ┌──────────────────┐
-                                    │  Fraud Analyst   │
-                                    └────────┬─────────┘
-                                             │
-                                       Investigation
-                                             │
-                              ┌──────────────┼──────────────┐
-                              ▼              ▼              ▼
-                         Legitimate     Confirmed Fraud   Escalate
+    subgraph Backend ["Node.js + Express REST API (Port 5000)"]
+        Auth["JWT & 5-Role RBAC"]
+        TxnEngine["Transaction & Feature Pipeline"]
+        RuleEngine["Dynamic Rule Evaluator"]
+        CaseEngine["Case Triage & Notes Workflow"]
+        DispEngine["Dispute Resolution & Auto-Credit"]
+        AuditLedger["Immutable Audit Logger"]
+    end
+
+    subgraph MLService ["Python 3.12 + FastAPI (Port 8000)"]
+        Inference["Trained Model (/predict)"]
+        SHAP["SHAP Explainability"]
+        Anomaly["Behavioral Deviation Scorer"]
+    end
+
+    subgraph Storage ["PostgreSQL 17"]
+        DB[(18 Relational Tables)]
+    end
+
+    Frontend <-->|REST API / JWT| Backend
+    Backend <-->|HTTP / JSON| MLService
+    Backend <-->|node-postgres pool| Storage
+```
+
+---
+
+## 🔑 Demo Credentials (Seeded Accounts)
+
+All accounts share the default password: **`Password@123`**
+
+| Role | Email | Scope & Permissions |
+|---|---|---|
+| **Customer** | `customer@fraudguard.local` | Simulate transactions, view live balance, track & raise disputes |
+| **Fraud Analyst** | `analyst@fraudguard.local` | Prioritized case queue, inspect ML & rule signals, record decisions |
+| **Fraud Manager** | `manager@fraudguard.local` | Team workload metrics, resolution rates, reassign cases |
+| **Admin** | `admin@fraudguard.local` | Configure fraud rules, calibrate thresholds, manage user roles |
+| **Auditor** | `auditor@fraudguard.local` | Read-only access to immutable audit log & compliance history |
+
+---
+
+## 🚀 Quick Start Guide (Windows)
+
+### Prerequisites
+- **Node.js** (v18+)
+- **Python** (3.10+)
+- **Git**
+- **PostgreSQL** (Portable binaries configured in `C:\Users\atulg\pgsql`)
+
+### 1-Click Launchers (Double Click in Root Directory)
+1. **`start-db.bat`** — Starts PostgreSQL database server on port 5432
+2. **`start-backend.bat`** — Starts Node.js backend on `http://localhost:5000`
+3. **`start-frontend.bat`** — Starts React Vite app on `http://localhost:5173`
+4. **`start-ml.bat`** — Starts FastAPI ML service on `http://localhost:8000`
+
+---
+
+## 🧪 Automated Testing & Verification
+
+### 1. Backend Unit Tests (Jest)
+```powershell
+cd backend
+npm test
+```
+*Tests hybrid risk score calculation (0–100), risk band classification (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`), and composite formula weighting.*
+
+### 2. ML Service Test Suite (Pytest)
+```powershell
+cd ml-service
+pytest tests/test_predict.py
+```
+*Tests `/health`, `/predict` validation, schema boundaries, rule fallbacks, and probability calibration.*
+
+### 3. Frontend Production Build (Vite)
+```powershell
+cd frontend
+npx vite build
+```
+
+---
+
+## 📊 End-to-End Workflow Verification
+
+1. **Transaction Simulation**:
+   - Customer logs in and simulates a ₹105,000 transaction with an unrecognized device and foreign IP.
+2. **Detection & Risk Evaluation**:
+   - Dynamic velocity is calculated from PostgreSQL (`velocity_last_hour`).
+   - Rule `RULE_HIGH_AMOUNT` fires.
+   - ML inference model predicts elevated fraud probability.
+   - Composite risk score evaluates to `63/100` (`HIGH` risk).
+3. **Automated Alert & Case Triage**:
+   - Transaction status is marked `flagged`.
+   - Alert and Fraud Case (`CASE-YYYYMMDD-XXXX`) are auto-created and assigned to active analyst.
+4. **Analyst Investigation & Decision**:
+   - Analyst inspects triggered rules, customer history, and feature contributions in the investigation drawer.
+   - Records notes and marks case as `confirmed_fraud`.
+5. **Auditor Compliance Verification**:
+   - Auditor logs in and verifies tamper-evident audit ledger entries.
+
+---
+
+## 📄 License & Attribution
+Developed for academic, research, and portfolio demonstrations. Do not connect directly to live production financial rails without banking-grade HSMs and compliance certification.

@@ -1,0 +1,371 @@
+import { useState, useEffect } from "react";
+import api from "../../services/api";
+import {
+  CreditCard,
+  AlertTriangle,
+  TrendingUp,
+  Clock,
+  Send,
+  CheckCircle2,
+  XCircle,
+  ShieldAlert
+} from "lucide-react";
+
+export default function CustomerDashboard() {
+  const [profile, setProfile] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    amount: "1500",
+    merchant_name: "Amazon India",
+    merchant_category: "retail",
+    payment_method: "card",
+    is_new_device: false,
+    is_international: false
+  });
+
+  const fetchData = async () => {
+    try {
+      const [profRes, txnRes] = await Promise.all([
+        api.get("/customer/profile"),
+        api.get("/customer/transactions?limit=10")
+      ]);
+      setProfile(profRes.data.data);
+      setTransactions(txnRes.data.data.transactions);
+    } catch (err) {
+      console.error("Failed to load customer data", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleSimulate = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setFeedback(null);
+
+    try {
+      const payload = {
+        amount: parseFloat(formData.amount),
+        merchant_name: formData.merchant_name,
+        merchant_category: formData.merchant_category,
+        payment_method: formData.payment_method,
+        is_new_device: formData.is_new_device,
+        is_international: formData.is_international
+      };
+
+      const res = await api.post("/transactions/simulate", payload);
+      setFeedback({
+        type: "success",
+        title: `Transaction ${res.data.data.transaction.status.toUpperCase()}`,
+        message: res.data.message,
+        risk: res.data.data.risk_level
+      });
+      // Refresh list and balance
+      fetchData();
+    } catch (err) {
+      setFeedback({
+        type: "error",
+        title: "Simulation Failed",
+        message: err.response?.data?.error?.message || "Transaction error"
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  const primaryAccount = profile?.accounts?.[0];
+  const balance = primaryAccount ? parseFloat(primaryAccount.balance).toLocaleString("en-IN") : "0";
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Welcome back, {profile?.first_name}
+          </h1>
+          <p className="text-sm text-gray-500">
+            Account #{primaryAccount?.account_number || "N/A"} • Savings
+          </p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm flex items-center gap-3">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-xs font-semibold text-gray-600 tracking-wide uppercase">
+            Risk Shield Active
+          </span>
+        </div>
+      </div>
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-500 font-medium">Available Balance</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">₹{balance}</p>
+          </div>
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-500 font-medium">Recent Transactions</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{transactions.length}</p>
+          </div>
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+            <CreditCard className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-500 font-medium">Profile Risk Rating</p>
+            <p className="text-2xl font-bold text-emerald-600 mt-1">{profile?.risk_level || "LOW"}</p>
+          </div>
+          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+            <Clock className="w-6 h-6" />
+          </div>
+        </div>
+      </div>
+
+      {/* Main Grid: Simulator + History */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Transaction Simulator */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 lg:col-span-1">
+          <div className="flex items-center gap-2 mb-4">
+            <Send className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Simulate Transaction</h2>
+          </div>
+          <p className="text-xs text-gray-500 mb-5">
+            Test how transactions trigger real-time ML risk scoring and detection rules.
+          </p>
+
+          {feedback && (
+            <div
+              className={`p-4 rounded-xl mb-4 text-sm flex gap-3 ${
+                feedback.type === "success"
+                  ? feedback.risk === "CRITICAL"
+                    ? "bg-rose-50 text-rose-800 border border-rose-200"
+                    : feedback.risk === "HIGH"
+                    ? "bg-amber-50 text-amber-800 border border-amber-200"
+                    : "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}
+            >
+              {feedback.risk === "CRITICAL" || feedback.type === "error" ? (
+                <XCircle className="w-5 h-5 flex-shrink-0 text-red-600" />
+              ) : feedback.risk === "HIGH" ? (
+                <ShieldAlert className="w-5 h-5 flex-shrink-0 text-amber-600" />
+              ) : (
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600" />
+              )}
+              <div>
+                <p className="font-semibold">{feedback.title}</p>
+                <p className="text-xs mt-0.5 opacity-90">{feedback.message}</p>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleSimulate} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Amount (INR ₹)
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="any"
+                required
+                value={formData.amount}
+                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              <span className="text-[11px] text-gray-400">
+                Tip: Try ₹1,500 (normal) vs ₹105,000 (triggers high amount rule)
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Merchant Name
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.merchant_name}
+                onChange={(e) => setFormData({ ...formData, merchant_name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Category
+                </label>
+                <select
+                  value={formData.merchant_category}
+                  onChange={(e) => setFormData({ ...formData, merchant_category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                >
+                  <option value="retail">Retail</option>
+                  <option value="electronics">Electronics</option>
+                  <option value="travel">Travel</option>
+                  <option value="dining">Dining</option>
+                  <option value="groceries">Groceries</option>
+                  <option value="crypto">Crypto/Gaming</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Method
+                </label>
+                <select
+                  value={formData.payment_method}
+                  onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                >
+                  <option value="card">Card</option>
+                  <option value="upi">UPI</option>
+                  <option value="netbanking">Net Banking</option>
+                  <option value="wallet">Wallet</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Checkbox triggers */}
+            <div className="space-y-2 pt-2 border-t border-gray-100">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.is_new_device}
+                  onChange={(e) => setFormData({ ...formData, is_new_device: e.target.checked })}
+                  className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <span className="text-xs text-gray-700 font-medium">
+                  Simulate New / Unrecognized Device
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.is_international}
+                  onChange={(e) => setFormData({ ...formData, is_international: e.target.checked })}
+                  className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <span className="text-xs text-gray-700 font-medium">
+                  Simulate International Cross-Border
+                </span>
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full mt-4 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50 text-sm shadow-sm"
+            >
+              {submitting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  Submit Simulation
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+
+        {/* Right: Transaction Activity */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 lg:col-span-2">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-lg font-semibold text-gray-900">Transaction History</h2>
+            <button
+              onClick={fetchData}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {transactions.length === 0 ? (
+            <p className="text-sm text-gray-500 py-8 text-center">
+              No transactions recorded yet. Use the simulator to create your first transaction!
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="py-3 px-3">Merchant</th>
+                    <th className="py-3 px-3">Amount</th>
+                    <th className="py-3 px-3">Method</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="py-3.5 px-3">
+                        <p className="font-semibold text-gray-900">{tx.merchant_name}</p>
+                        <p className="text-xs text-gray-400 capitalize">{tx.merchant_category}</p>
+                      </td>
+                      <td className="py-3.5 px-3 font-semibold text-gray-900">
+                        ₹{parseFloat(tx.amount).toLocaleString("en-IN")}
+                      </td>
+                      <td className="py-3.5 px-3 capitalize text-gray-600 text-xs">
+                        {tx.payment_method}
+                      </td>
+                      <td className="py-3.5 px-3">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${
+                            tx.status === "completed"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : tx.status === "flagged"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-rose-50 text-rose-700"
+                          }`}
+                        >
+                          {tx.status}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-3 text-xs text-gray-400 whitespace-nowrap">
+                        {new Date(tx.created_at).toLocaleString("en-IN", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

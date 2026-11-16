@@ -1,0 +1,123 @@
+version: "3.9"
+
+services:
+  # ──────────────────────────────────────────────
+  # PostgreSQL 15 — primary datastore
+  # ──────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: fraud-detection-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
+      POSTGRES_DB: ${DB_NAME:-fraud_detection}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - fraud-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-fraud_detection}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────────
+  # pgAdmin — database administration UI (optional)
+  # ──────────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: fraud-detection-pgadmin
+    restart: unless-stopped
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@fraud-detection.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - fraud-net
+
+  # ──────────────────────────────────────────────
+  # Backend API — Node.js / Express  (build later)
+  # ──────────────────────────────────────────────
+  # Uncomment once ./backend/Dockerfile is ready
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: fraud-detection-backend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     DB_HOST: db
+  #     DB_PORT: 5432
+  #     DB_NAME: ${DB_NAME:-fraud_detection}
+  #     DB_USER: ${DB_USER:-postgres}
+  #     DB_PASSWORD: ${DB_PASSWORD:-postgres123}
+  #     JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+  #     JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+  #     ML_SERVICE_URL: http://ml-service:8000
+  #     NODE_ENV: ${NODE_ENV:-development}
+  #     FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   networks:
+  #     - fraud-net
+
+  # ──────────────────────────────────────────────
+  # ML Service — Python / FastAPI  (build later)
+  # ──────────────────────────────────────────────
+  # Uncomment once ./ml-service/Dockerfile is ready
+  # ml-service:
+  #   build:
+  #     context: ./ml-service
+  #     dockerfile: Dockerfile
+  #   container_name: fraud-detection-ml
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     DB_HOST: db
+  #     DB_PORT: 5432
+  #     DB_NAME: ${DB_NAME:-fraud_detection}
+  #     DB_USER: ${DB_USER:-postgres}
+  #     DB_PASSWORD: ${DB_PASSWORD:-postgres123}
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   networks:
+  #     - fraud-net
+
+  # ──────────────────────────────────────────────
+  # Frontend — React / Vite  (build later)
+  # ──────────────────────────────────────────────
+  # Uncomment once ./frontend/Dockerfile is ready
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: fraud-detection-frontend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     VITE_API_URL: http://localhost:5000/api
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - fraud-net
+
+volumes:
+  pg_data:
+    driver: local
+
+networks:
+  fraud-net:
+    driver: bridge
