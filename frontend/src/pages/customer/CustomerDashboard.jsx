@@ -8,15 +8,25 @@ import {
   Send,
   CheckCircle2,
   XCircle,
-  ShieldAlert
+  ShieldAlert,
+  HelpCircle,
+  X
 } from "lucide-react";
 
 export default function CustomerDashboard() {
   const [profile, setProfile] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [disputes, setDisputes] = useState([]);
+  const [activeTab, setActiveTab] = useState("transactions");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
+
+  // Dispute modal state
+  const [disputeModalTxn, setDisputeModalTxn] = useState(null);
+  const [disputeReason, setDisputeReason] = useState("Unrecognized charge");
+  const [disputeDescription, setDisputeDescription] = useState("");
+  const [submittingDispute, setSubmittingDispute] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -30,12 +40,14 @@ export default function CustomerDashboard() {
 
   const fetchData = async () => {
     try {
-      const [profRes, txnRes] = await Promise.all([
+      const [profRes, txnRes, dispRes] = await Promise.all([
         api.get("/customer/profile"),
-        api.get("/customer/transactions?limit=10")
+        api.get("/customer/transactions?limit=15"),
+        api.get("/disputes/my")
       ]);
       setProfile(profRes.data.data);
       setTransactions(txnRes.data.data.transactions);
+      setDisputes(dispRes.data.data);
     } catch (err) {
       console.error("Failed to load customer data", err);
     } finally {
@@ -69,7 +81,6 @@ export default function CustomerDashboard() {
         message: res.data.message,
         risk: res.data.data.risk_level
       });
-      // Refresh list and balance
       fetchData();
     } catch (err) {
       setFeedback({
@@ -79,6 +90,32 @@ export default function CustomerDashboard() {
       });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleOpenDispute = (txn) => {
+    setDisputeModalTxn(txn);
+    setDisputeReason("Unrecognized charge");
+    setDisputeDescription("");
+  };
+
+  const handleSubmitDispute = async (e) => {
+    e.preventDefault();
+    setSubmittingDispute(true);
+    try {
+      await api.post("/disputes", {
+        transaction_id: disputeModalTxn.id,
+        reason: disputeReason,
+        description: disputeDescription
+      });
+      setDisputeModalTxn(null);
+      await fetchData();
+      setActiveTab("disputes");
+      alert("Dispute submitted successfully! Our fraud team has been notified.");
+    } catch (err) {
+      alert(err.response?.data?.error?.message || "Failed to submit dispute");
+    } finally {
+      setSubmittingDispute(false);
     }
   };
 
@@ -127,7 +164,7 @@ export default function CustomerDashboard() {
 
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-500 font-medium">Recent Transactions</p>
+            <p className="text-sm text-gray-500 font-medium">Transactions</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{transactions.length}</p>
           </div>
           <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
@@ -137,16 +174,18 @@ export default function CustomerDashboard() {
 
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-500 font-medium">Profile Risk Rating</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{profile?.risk_level || "LOW"}</p>
+            <p className="text-sm text-gray-500 font-medium">Active Disputes</p>
+            <p className="text-2xl font-bold text-amber-600 mt-1">
+              {disputes.filter((d) => d.status !== "resolved").length}
+            </p>
           </div>
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-            <Clock className="w-6 h-6" />
+          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+            <HelpCircle className="w-6 h-6" />
           </div>
         </div>
       </div>
 
-      {/* Main Grid: Simulator + History */}
+      {/* Main Grid: Simulator + Tabbed History / Disputes */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Transaction Simulator */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 lg:col-span-1">
@@ -296,10 +335,32 @@ export default function CustomerDashboard() {
           </form>
         </div>
 
-        {/* Right: Transaction Activity */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 lg:col-span-2">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-semibold text-gray-900">Transaction History</h2>
+        {/* Right: Tabbed Transactions & Disputes (2 cols) */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 lg:col-span-2 flex flex-col">
+          {/* Tabs */}
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveTab("transactions")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  activeTab === "transactions"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-500 hover:bg-gray-100"
+                }`}
+              >
+                Transactions ({transactions.length})
+              </button>
+              <button
+                onClick={() => setActiveTab("disputes")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  activeTab === "disputes"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-500 hover:bg-gray-100"
+                }`}
+              >
+                Disputes & Claims ({disputes.length})
+              </button>
+            </div>
             <button
               onClick={fetchData}
               className="text-xs font-semibold text-blue-600 hover:text-blue-700"
@@ -308,64 +369,202 @@ export default function CustomerDashboard() {
             </button>
           </div>
 
-          {transactions.length === 0 ? (
-            <p className="text-sm text-gray-500 py-8 text-center">
-              No transactions recorded yet. Use the simulator to create your first transaction!
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    <th className="py-3 px-3">Merchant</th>
-                    <th className="py-3 px-3">Amount</th>
-                    <th className="py-3 px-3">Method</th>
-                    <th className="py-3 px-3">Status</th>
-                    <th className="py-3 px-3">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {transactions.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-3.5 px-3">
-                        <p className="font-semibold text-gray-900">{tx.merchant_name}</p>
-                        <p className="text-xs text-gray-400 capitalize">{tx.merchant_category}</p>
-                      </td>
-                      <td className="py-3.5 px-3 font-semibold text-gray-900">
-                        ₹{parseFloat(tx.amount).toLocaleString("en-IN")}
-                      </td>
-                      <td className="py-3.5 px-3 capitalize text-gray-600 text-xs">
-                        {tx.payment_method}
-                      </td>
-                      <td className="py-3.5 px-3">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${
-                            tx.status === "completed"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : tx.status === "flagged"
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-rose-50 text-rose-700"
-                          }`}
-                        >
-                          {tx.status}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3 text-xs text-gray-400 whitespace-nowrap">
-                        {new Date(tx.created_at).toLocaleString("en-IN", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit"
-                        })}
-                      </td>
+          {/* Tab 1: Transactions Table */}
+          {activeTab === "transactions" && (
+            <div className="overflow-x-auto flex-1">
+              {transactions.length === 0 ? (
+                <p className="text-sm text-gray-500 py-8 text-center">
+                  No transactions recorded yet. Use the simulator to create one!
+                </p>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-gray-400 font-semibold uppercase">
+                      <th className="py-2.5 px-3">Merchant</th>
+                      <th className="py-2.5 px-3">Amount</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3 text-right">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {transactions.map((tx) => (
+                      <tr key={tx.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-3 px-3">
+                          <p className="font-semibold text-gray-900">{tx.merchant_name}</p>
+                          <p className="text-[11px] text-gray-400 capitalize">{tx.merchant_category}</p>
+                        </td>
+                        <td className="py-3 px-3 font-semibold text-gray-900">
+                          ₹{parseFloat(tx.amount).toLocaleString("en-IN")}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${
+                              tx.status === "completed"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : tx.status === "flagged"
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-rose-50 text-rose-700"
+                            }`}
+                          >
+                            {tx.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-[11px] text-gray-400 whitespace-nowrap">
+                          {new Date(tx.created_at).toLocaleString("en-IN", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          {tx.dispute_id ? (
+                            <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full uppercase">
+                              Disputed
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleOpenDispute(tx)}
+                              className="text-xs text-rose-600 hover:text-rose-800 font-semibold"
+                            >
+                              Dispute
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* Tab 2: Disputes Table */}
+          {activeTab === "disputes" && (
+            <div className="overflow-x-auto flex-1">
+              {disputes.length === 0 ? (
+                <p className="text-sm text-gray-500 py-8 text-center">
+                  You have not submitted any disputes.
+                </p>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-gray-400 font-semibold uppercase">
+                      <th className="py-2.5 px-3">Merchant / Amount</th>
+                      <th className="py-2.5 px-3">Reason</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3">Resolution Notes</th>
+                      <th className="py-2.5 px-3">Submitted</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {disputes.map((d) => (
+                      <tr key={d.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-3 px-3">
+                          <p className="font-semibold text-gray-900">{d.merchant_name}</p>
+                          <p className="text-[11px] text-gray-500">₹{parseFloat(d.amount).toLocaleString("en-IN")}</p>
+                        </td>
+                        <td className="py-3 px-3 text-gray-700 font-medium">{d.reason}</td>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${
+                              d.status === "resolved"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : d.status === "rejected"
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-blue-100 text-blue-800"
+                            }`}
+                          >
+                            {d.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-gray-600 max-w-xs truncate text-[11px]">
+                          {d.resolution || "Under analyst review"}
+                        </td>
+                        <td className="py-3 px-3 text-gray-400 text-[11px] whitespace-nowrap">
+                          {new Date(d.created_at).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Dispute Modal */}
+      {disputeModalTxn && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2 text-rose-600">
+                <ShieldAlert className="w-5 h-5" />
+                <h3 className="font-bold text-gray-900">Raise Transaction Dispute</h3>
+              </div>
+              <button
+                onClick={() => setDisputeModalTxn(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-3 text-xs space-y-1">
+              <p><span className="text-gray-400">Merchant:</span> <span className="font-semibold">{disputeModalTxn.merchant_name}</span></p>
+              <p><span className="text-gray-400">Amount:</span> <span className="font-semibold">₹{parseFloat(disputeModalTxn.amount).toLocaleString("en-IN")}</span></p>
+              <p><span className="text-gray-400">Reference:</span> <span className="font-mono">{disputeModalTxn.id}</span></p>
+            </div>
+
+            <form onSubmit={handleSubmitDispute} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Reason for Dispute</label>
+                <select
+                  value={disputeReason}
+                  onChange={(e) => setDisputeReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="Unrecognized charge">Unrecognized charge (I did not make this purchase)</option>
+                  <option value="Incorrect charge amount">Incorrect charge amount</option>
+                  <option value="Duplicate billing">Duplicate billing / charged twice</option>
+                  <option value="Goods not received">Goods / Services not received</option>
+                  <option value="Suspected card compromise">Suspected card compromise</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Additional Details (Optional)</label>
+                <textarea
+                  rows={3}
+                  value={disputeDescription}
+                  onChange={(e) => setDisputeDescription(e.target.value)}
+                  placeholder="Provide any relevant context for the fraud analyst team..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDisputeModalTxn(null)}
+                  className="flex-1 py-2 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingDispute}
+                  className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50"
+                >
+                  {submittingDispute ? "Submitting..." : "Confirm & Submit Dispute"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
