@@ -1,4 +1,3 @@
-// ─── Case Controller ───────────────────────────────────────────────────────
 import caseService from "../services/case.service.js";
 import { successResponse } from "../utils/apiResponse.js";
 
@@ -13,6 +12,21 @@ export const getCases = async (req, res, next) => {
       offset: parseInt(offset, 10) || 0
     });
     return successResponse(res, result, "Cases fetched successfully");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getAlerts = async (req, res, next) => {
+  try {
+    const { severity, status, limit, offset } = req.query;
+    const result = await caseService.getAlerts({
+      severity,
+      status,
+      limit: parseInt(limit, 10) || 50,
+      offset: parseInt(offset, 10) || 0
+    });
+    return successResponse(res, result, "Alerts fetched successfully");
   } catch (err) {
     next(err);
   }
@@ -54,4 +68,4 @@ export const reassign = async (req, res, next) => {
   }
 };
 
-export default { getCases, getCaseById, addNote, recordDecision, reassign };
+export default { getCases, getAlerts, getCaseById, addNote, recordDecision, reassign };

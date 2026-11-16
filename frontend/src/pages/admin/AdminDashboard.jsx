@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import api from "../../services/api";
 import {
   Shield,
@@ -8,26 +9,39 @@ import {
   ToggleRight,
   CheckCircle,
   XCircle,
-  Plus,
+  ClipboardList,
   RefreshCw
 } from "lucide-react";
 
 export default function AdminDashboard() {
+  const location = useLocation();
+  const path = location.pathname;
+
   const [activeTab, setActiveTab] = useState("rules");
   const [rules, setRules] = useState([]);
   const [users, setUsers] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Sync tab with URL
+  useEffect(() => {
+    if (path.endsWith("/users")) setActiveTab("users");
+    else if (path.endsWith("/rules")) setActiveTab("rules");
+    else if (path.endsWith("/audit")) setActiveTab("audit");
+  }, [path]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [rulesRes, usersRes] = await Promise.all([
+      const [rulesRes, usersRes, auditRes] = await Promise.all([
         api.get("/admin/rules"),
-        api.get("/admin/users?limit=50")
+        api.get("/admin/users?limit=50"),
+        api.get("/admin/audit-logs?limit=50")
       ]);
       setRules(rulesRes.data.data);
       setUsers(usersRes.data.data.users);
+      setAuditLogs(auditRes.data.data.logs);
     } catch (err) {
       console.error("Failed to fetch admin data", err);
     } finally {
@@ -117,7 +131,7 @@ export default function AdminDashboard() {
           }`}
         >
           <Shield className="w-4 h-4" />
-          Fraud Detection Rules ({rules.length})
+          Fraud Rules ({rules.length})
         </button>
         <button
           onClick={() => setActiveTab("users")}
@@ -128,20 +142,29 @@ export default function AdminDashboard() {
           }`}
         >
           <Users className="w-4 h-4" />
-          User Permissions & RBAC ({users.length})
+          Users & RBAC ({users.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("audit")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition ${
+            activeTab === "audit"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-gray-600 hover:bg-gray-100"
+          }`}
+        >
+          <ClipboardList className="w-4 h-4" />
+          System Audit Trail ({auditLogs.length})
         </button>
       </div>
 
       {/* Tab Content: Rules */}
       {activeTab === "rules" && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-bold text-gray-900">Configured Rule Catalog</h2>
-              <p className="text-xs text-gray-400">
-                Rules are evaluated dynamically during every transaction simulation
-              </p>
-            </div>
+          <div className="p-4 border-b border-gray-100">
+            <h2 className="text-sm font-bold text-gray-900">Configured Rule Catalog</h2>
+            <p className="text-xs text-gray-400">
+              Rules are evaluated dynamically during every transaction simulation
+            </p>
           </div>
 
           <div className="overflow-x-auto">
@@ -159,25 +182,13 @@ export default function AdminDashboard() {
               <tbody className="divide-y divide-gray-100">
                 {rules.map((rule) => (
                   <tr key={rule.id} className="hover:bg-gray-50/60 transition-colors">
-                    <td className="py-3.5 px-4">
-                      <span className="font-mono font-bold text-gray-900">{rule.name}</span>
-                    </td>
+                    <td className="py-3.5 px-4 font-mono font-bold text-gray-900">{rule.name}</td>
                     <td className="py-3.5 px-4 text-gray-600 max-w-xs">{rule.description}</td>
-                    <td className="py-3.5 px-4 capitalize font-medium text-gray-500">
-                      {rule.rule_type}
-                    </td>
+                    <td className="py-3.5 px-4 capitalize font-medium text-gray-500">{rule.rule_type}</td>
                     <td className="py-3.5 px-4">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                          rule.severity === "CRITICAL"
-                            ? "bg-rose-100 text-rose-800"
-                            : rule.severity === "HIGH"
-                            ? "bg-amber-100 text-amber-800"
-                            : "bg-blue-100 text-blue-800"
-                        }`}
-                      >
-                        {rule.severity}
-                      </span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                        rule.severity === "CRITICAL" ? "bg-rose-100 text-rose-800" : rule.severity === "HIGH" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                      }`}>{rule.severity}</span>
                     </td>
                     <td className="py-3.5 px-4">
                       {rule.is_enabled ? (
@@ -194,15 +205,9 @@ export default function AdminDashboard() {
                       <button
                         onClick={() => handleToggleRule(rule.id, rule.is_enabled)}
                         disabled={actionLoading}
-                        className={`text-lg transition disabled:opacity-50 ${
-                          rule.is_enabled ? "text-blue-600" : "text-gray-300"
-                        }`}
+                        className={`text-lg transition disabled:opacity-50 ${rule.is_enabled ? "text-blue-600" : "text-gray-300"}`}
                       >
-                        {rule.is_enabled ? (
-                          <ToggleRight className="w-7 h-7" />
-                        ) : (
-                          <ToggleLeft className="w-7 h-7" />
-                        )}
+                        {rule.is_enabled ? <ToggleRight className="w-7 h-7" /> : <ToggleLeft className="w-7 h-7" />}
                       </button>
                     </td>
                   </tr>
@@ -256,11 +261,9 @@ export default function AdminDashboard() {
                       </select>
                     </td>
                     <td className="py-3.5 px-4">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                          user.is_active ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
-                        }`}
-                      >
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                        user.is_active ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                      }`}>
                         {user.is_active ? "Active" : "Disabled"}
                       </span>
                     </td>
@@ -272,6 +275,45 @@ export default function AdminDashboard() {
                       >
                         {user.is_active ? "Deactivate" : "Activate"}
                       </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Content: Audit */}
+      {activeTab === "audit" && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-4 border-b border-gray-100">
+            <h2 className="text-sm font-bold text-gray-900">Administrative Audit Trail</h2>
+            <p className="text-xs text-gray-400">Append-only security and policy configuration events</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 font-semibold uppercase bg-gray-50/50">
+                  <th className="py-3 px-4">Timestamp</th>
+                  <th className="py-3 px-4">Action</th>
+                  <th className="py-3 px-4">Actor</th>
+                  <th className="py-3 px-4">Target Entity</th>
+                  <th className="py-3 px-4">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {auditLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-gray-50/70">
+                    <td className="py-3.5 px-4 text-gray-500 font-mono text-[11px]">
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
+                    <td className="py-3.5 px-4 font-mono font-bold text-blue-700">{log.action}</td>
+                    <td className="py-3.5 px-4 font-semibold text-gray-900">{log.user_email || "System"}</td>
+                    <td className="py-3.5 px-4 text-gray-600 capitalize">{log.entity_type}</td>
+                    <td className="py-3.5 px-4 font-mono text-[11px] text-gray-500 max-w-xs truncate">
+                      {typeof log.details === "object" ? JSON.stringify(log.details) : log.details || "—"}
                     </td>
                   </tr>
                 ))}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import api from "../../services/api";
 import {
   BarChart,
@@ -18,7 +19,8 @@ import {
   Users,
   AlertTriangle,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  UserCheck
 } from "lucide-react";
 
 const RISK_COLORS = {
@@ -29,23 +31,50 @@ const RISK_COLORS = {
 };
 
 export default function ManagerDashboard() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const location = useLocation();
+  const path = location.pathname;
 
-  const fetchMetrics = async () => {
+  const [data, setData] = useState(null);
+  const [cases, setCases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [reassigningCaseId, setReassigningCaseId] = useState(null);
+  const [selectedAnalystId, setSelectedAnalystId] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const fetchMetricsAndCases = async () => {
     try {
-      const res = await api.get("/analytics/metrics");
-      setData(res.data.data);
+      const [metricsRes, casesRes] = await Promise.all([
+        api.get("/analytics/metrics"),
+        api.get("/cases?limit=50")
+      ]);
+      setData(metricsRes.data.data);
+      setCases(casesRes.data.data.cases);
     } catch (err) {
-      console.error("Failed to load metrics", err);
+      console.error("Failed to load manager data", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMetrics();
+    fetchMetricsAndCases();
   }, []);
+
+  const handleReassign = async (caseId) => {
+    if (!selectedAnalystId) return alert("Select an analyst first");
+    setActionLoading(true);
+    try {
+      await api.patch(`/cases/${caseId}/reassign`, { analyst_id: selectedAnalystId });
+      setReassigningCaseId(null);
+      setSelectedAnalystId("");
+      await fetchMetricsAndCases();
+      alert("Case successfully reassigned!");
+    } catch (err) {
+      alert(err.response?.data?.error?.message || "Failed to reassign case");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -63,18 +92,28 @@ export default function ManagerDashboard() {
     color: RISK_COLORS[r.risk_level] || "#6b7280"
   }));
 
+  const isCasesView = path.endsWith("/cases");
+  const isAnalyticsView = path.endsWith("/analytics");
+  const isOverview = !isCasesView && !isAnalyticsView;
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Fraud Operations Command Center</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isCasesView
+              ? "All Operational Fraud Cases"
+              : isAnalyticsView
+              ? "Fraud Analytics & Risk Intelligence"
+              : "Fraud Operations Command Center"}
+          </h1>
           <p className="text-sm text-gray-500">
             Real-time fraud surveillance, risk distribution, and analyst team workload
           </p>
         </div>
         <button
-          onClick={fetchMetrics}
+          onClick={fetchMetricsAndCases}
           className="flex items-center gap-2 px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-sm transition"
         >
           <RefreshCw className="w-3.5 h-3.5" />
@@ -137,97 +176,88 @@ export default function ManagerDashboard() {
         </div>
       </div>
 
-      {/* Visualizations Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Risk Distribution (Pie) */}
-        <div className="lg:col-span-4 bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col">
-          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2">
-            Risk Score Distribution
-          </h2>
-          <p className="text-xs text-gray-400 mb-4">Assessed transactions by severity band</p>
-
-          <div className="h-56 flex items-center justify-center">
-            {pieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={80}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-xs text-gray-400">No risk evaluations yet</p>
-            )}
+      {/* VIEW: ALL CASES WITH REASSIGNMENT */}
+      {isCasesView ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+              Platform-Wide Case Registry ({cases.length} cases)
+            </h2>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-gray-100">
-            {pieData.map((p) => (
-              <div key={p.name} className="flex items-center gap-2 text-xs">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color }} />
-                <span className="text-gray-600 font-medium">{p.name}:</span>
-                <span className="font-bold text-gray-900">{p.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Analyst Workload Table (8 cols) */}
-        <div className="lg:col-span-8 bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider">
-                Analyst Team Workload & Performance
-              </h2>
-              <p className="text-xs text-gray-400">Active queue allocation and closed cases</p>
-            </div>
-            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg flex items-center gap-1">
-              <Users className="w-3.5 h-3.5" />
-              {analyst_workload?.length || 0} Analysts
-            </span>
-          </div>
-
-          <div className="overflow-x-auto flex-1">
+          <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-gray-100 text-gray-400 font-semibold uppercase">
-                  <th className="py-2.5 px-3">Analyst Name</th>
-                  <th className="py-2.5 px-3">Active Queue</th>
-                  <th className="py-2.5 px-3">Resolved</th>
-                  <th className="py-2.5 px-3">Total Assigned</th>
-                  <th className="py-2.5 px-3">Status</th>
+                <tr className="border-b border-gray-100 text-gray-400 font-semibold uppercase bg-gray-50/50">
+                  <th className="py-3 px-4">Case #</th>
+                  <th className="py-3 px-4">Title / Transaction</th>
+                  <th className="py-3 px-4">Priority</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Assigned Analyst</th>
+                  <th className="py-3 px-4 text-right">Reassign</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
-                {(analyst_workload || []).map((a) => (
-                  <tr key={a.id} className="hover:bg-gray-50/70">
-                    <td className="py-3 px-3">
-                      <p className="font-bold text-gray-900">
-                        {a.first_name} {a.last_name}
+              <tbody className="divide-y divide-gray-100">
+                {cases.map((c) => (
+                  <tr key={c.id} className="hover:bg-gray-50/70">
+                    <td className="py-3.5 px-4 font-mono font-bold text-blue-700">{c.case_number}</td>
+                    <td className="py-3.5 px-4">
+                      <p className="font-bold text-gray-900">{c.title}</p>
+                      <p className="text-[11px] text-gray-400 font-medium">
+                        Amount: ₹{parseFloat(c.amount).toLocaleString("en-IN")} • Risk: {c.risk_score || "N/A"}/100
                       </p>
-                      <p className="text-[11px] text-gray-400">{a.email}</p>
                     </td>
-                    <td className="py-3 px-3">
-                      <span className="font-bold text-amber-600">{a.active_cases}</span> cases
+                    <td className="py-3.5 px-4">
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                        c.priority === "CRITICAL" ? "bg-rose-100 text-rose-800" : c.priority === "HIGH" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                      }`}>{c.priority}</span>
                     </td>
-                    <td className="py-3 px-3">
-                      <span className="font-bold text-emerald-600">{a.resolved_cases}</span>
+                    <td className="py-3.5 px-4 capitalize font-semibold text-gray-700">{c.status}</td>
+                    <td className="py-3.5 px-4">
+                      {c.analyst_first ? (
+                        <span className="font-semibold text-gray-900">{c.analyst_first} {c.analyst_last}</span>
+                      ) : (
+                        <span className="text-gray-400 italic">Unassigned</span>
+                      )}
                     </td>
-                    <td className="py-3 px-3 font-semibold text-gray-700">{a.total_assigned}</td>
-                    <td className="py-3 px-3">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        <CheckCircle2 className="w-3 h-3" /> Ready
-                      </span>
+                    <td className="py-3.5 px-4 text-right">
+                      {reassigningCaseId === c.id ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <select
+                            value={selectedAnalystId}
+                            onChange={(e) => setSelectedAnalystId(e.target.value)}
+                            className="px-2 py-1 border border-gray-200 rounded text-xs bg-white"
+                          >
+                            <option value="">Select Analyst</option>
+                            {(analyst_workload || []).map((a) => (
+                              <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => handleReassign(c.id)}
+                            disabled={actionLoading}
+                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-semibold"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setReassigningCaseId(null)}
+                            className="px-2 py-1 text-gray-500 text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setReassigningCaseId(c.id);
+                            setSelectedAnalystId("");
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                        >
+                          Reassign
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -235,7 +265,107 @@ export default function ManagerDashboard() {
             </table>
           </div>
         </div>
-      </div>
+      ) : (
+        /* VIEW: DASHBOARD & CHARTS */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Risk Distribution (Pie) */}
+          <div className="lg:col-span-4 bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col">
+            <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2">
+              Risk Score Distribution
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">Assessed transactions by severity band</p>
+
+            <div className="h-56 flex items-center justify-center">
+              {pieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-xs text-gray-400">No risk evaluations yet</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-gray-100">
+              {pieData.map((p) => (
+                <div key={p.name} className="flex items-center gap-2 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color }} />
+                  <span className="text-gray-600 font-medium">{p.name}:</span>
+                  <span className="font-bold text-gray-900">{p.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Analyst Workload Table (8 cols) */}
+          <div className="lg:col-span-8 bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider">
+                  Analyst Team Workload & Performance
+                </h2>
+                <p className="text-xs text-gray-400">Active queue allocation and closed cases</p>
+              </div>
+              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg flex items-center gap-1">
+                <Users className="w-3.5 h-3.5" />
+                {analyst_workload?.length || 0} Analysts
+              </span>
+            </div>
+
+            <div className="overflow-x-auto flex-1">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100 text-gray-400 font-semibold uppercase">
+                    <th className="py-2.5 px-3">Analyst Name</th>
+                    <th className="py-2.5 px-3">Active Queue</th>
+                    <th className="py-2.5 px-3">Resolved</th>
+                    <th className="py-2.5 px-3">Total Assigned</th>
+                    <th className="py-2.5 px-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {(analyst_workload || []).map((a) => (
+                    <tr key={a.id} className="hover:bg-gray-50/70">
+                      <td className="py-3 px-3">
+                        <p className="font-bold text-gray-900">
+                          {a.first_name} {a.last_name}
+                        </p>
+                        <p className="text-[11px] text-gray-400">{a.email}</p>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="font-bold text-amber-600">{a.active_cases}</span> cases
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="font-bold text-emerald-600">{a.resolved_cases}</span>
+                      </td>
+                      <td className="py-3 px-3 font-semibold text-gray-700">{a.total_assigned}</td>
+                      <td className="py-3 px-3">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                          <CheckCircle2 className="w-3 h-3" /> Ready
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
